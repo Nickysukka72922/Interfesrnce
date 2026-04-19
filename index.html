@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>STALKER - No Static Fix</title>
+    <title>STALKER - Fixed Joystick</title>
     
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.9.1/nipplejs.min.js"></script>
@@ -14,8 +14,6 @@
             overflow: hidden; background-color: black; position: fixed;
             touch-action: none; 
         }
-
-        /* Static/Noise overlay has been deleted */
 
         #joystick-zone {
             position: absolute; bottom: 40px; left: 40px;
@@ -84,8 +82,7 @@
         document.querySelector('#start-button').addEventListener('click', function() {
             document.querySelector('#start-screen').style.display = 'none';
             
-            const scene = document.querySelector('a-scene');
-            if (scene.requestFullscreen) scene.requestFullscreen();
+            // FULLSCREEN REMOVED to keep joystick visible
 
             // Setup Joystick
             const manager = nipplejs.create({
