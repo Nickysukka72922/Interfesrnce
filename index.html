@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Stalker Horror - Thumbstick Edition</title>
+    
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.9.1/nipplejs.min.js"></script>
+    
+    <style>
+        html, body { 
+            margin: 0; padding: 0; width: 100vw; height: 100vh;
+            overflow: hidden; background-color: black; position: fixed;
+            touch-action: none; 
+        }
+
+        /* The Grain and Vignette */
+        #noise-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            opacity: 0.1; z-index: 100; pointer-events: none;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+        #vignette {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, transparent 20%, black 100%);
+            z-index: 101; pointer-events: none;
+        }
+
+        /* Joystick Container */
+        #joystick-zone {
+            position: absolute;
+            bottom: 50px;
+            left: 50px;
+            width: 120px;
+            height: 120px;
+            z-index: 1000;
+            display: none; /* Hidden by default, shown via JS */
+        }
+
+        #fix-button {
+            position: absolute; top: 10px; right: 10px;
+            z-index: 1001; background: #333; color: white;
+            padding: 15px; border: 1px solid #555; font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+
+    <button id="fix-button" onclick="goFullscreen()">START GAME</button>
+    <div id="joystick-zone"></div>
+    <div id="noise-overlay"></div>
+    <div id="vignette"></div>
+
+    <a-scene embedded vr-mode-ui="enabled: false" fog="type: exponential; color: #000; density: 0.2">
+        <a-sky color="#000"></a-sky>
+
+        <a-entity id="rig" position="0 0 0">
+            <a-entity id="camera" camera look-controls="pointerLockEnabled: true" position="0 1.6 0">
+                <a-light type="spot" color="#fff" intensity="1.5" distance="15" angle="25" penumbra="1" castShadow="true"></a-light>
+                <a-light type="ambient" color="#222" intensity="0.1"></a-light>
+            </a-entity>
+        </a-entity>
+
+        <a-plane rotation="-90 0 0" width="1000" height="1000" color="#050505" shadow="receive: true"></a-plane>
+        <a-entity id="world"></a-entity>
+    </a-scene>
+
+    <script>
+        const world = document.querySelector('#world');
+        const rig = document.querySelector('#rig');
+        const camera = document.querySelector('#camera');
+        
+        // Movement variables
+        let moveForce = { x: 0, y: 0 };
+        const moveSpeed = 0.12;
+
+        // 1. Build World
+        for (let i = 0; i < 150; i++) {
+            const box = document.createElement('a-box');
+            const x = (Math.random() - 0.5) * 150;
+            const z = (Math.random() - 0.5) * 150;
+            const h = Math.random() * 15 + 5;
+            box.setAttribute('position', `${x} ${h/2} ${z}`);
+            box.setAttribute('width', '0.2'); box.setAttribute('depth', '0.2');
+            box.setAttribute('height', h); box.setAttribute('color', '#000');
+            box.setAttribute('shadow', 'cast: true');
+            world.appendChild(box);
+        }
+
+        // 2. Fullscreen & Interaction
+        function goFullscreen() {
+            const scene = document.querySelector('a-scene');
+            if (scene.requestFullscreen) { scene.requestFullscreen(); }
+            document.getElementById('fix-button').style.display = 'none';
+        }
+
+        // 3. Mobile Detection & Joystick Setup
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        
+        if (isMobile) {
+            const joystickZone = document.getElementById('joystick-zone');
+            joystickZone.style.display = 'block';
+
+            const manager = nipplejs.create({
+                zone: joystickZone,
+                mode: 'static',
+                position: { left: '50%', top: '50%' },
+                color: 'white'
+            });
+
+            manager.on('move', (evt, data) => {
+                // Get the angle and force from the joystick
+                const force = data.force > 1 ? 1 : data.force;
+                const angle = data.angle.radian;
+                moveForce.x = Math.cos(angle) * force;
+                moveForce.y = Math.sin(angle) * force;
+            });
+
+            manager.on('end', () => {
+                moveForce = { x: 0, y: 0 };
+            });
+        }
+
+        // 4. Movement Loop
+        function update() {
+            if (moveForce.x !== 0 || moveForce.y !== 0) {
+                // Get camera direction
+                const direction = new THREE.Vector3();
+                camera.object3D.getWorldDirection(direction);
+                
+                // Calculate side direction for strafing
+                const sideDir = new THREE.Vector3();
+                sideDir.crossVectors(new THREE.Vector3(0, 1, 0), direction).normalize();
+
+                // Apply Forward/Backward (moveForce.y)
+                rig.object3D.position.addScaledVector(direction, -moveForce.y * moveSpeed);
+                // Apply Left/Right Strafe (moveForce.x)
+                rig.object3D.position.addScaledVector(sideDir, moveForce.x * moveSpeed);
+            }
+            requestAnimationFrame(update);
+        }
+        update();
+    </script>
+</body>
+</html>
