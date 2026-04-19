@@ -14,7 +14,6 @@
             overflow: hidden; background-color: black; position: fixed;
         }
 
-        /* HUD & UI */
         #joystick-zone {
             position: absolute; bottom: 40px; left: 40px;
             width: 150px; height: 150px; z-index: 1000;
@@ -38,13 +37,15 @@
         /* Settings Menu Panel */
         #settings-menu {
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 250px; background: rgba(0,0,0,0.9); border: 2px solid white;
+            width: 280px; background: rgba(0,0,0,0.95); border: 2px solid #444;
             color: white; font-family: monospace; padding: 20px;
             z-index: 4000; display: none; text-align: center;
+            border-radius: 10px;
         }
 
-        .setting-row { margin: 15px 0; display: flex; flex-direction: column; }
-        input[type=range] { cursor: pointer; }
+        .setting-row { margin: 15px 0; display: flex; flex-direction: column; align-items: center;}
+        input[type=range] { width: 80%; cursor: pointer; }
+        label { font-size: 12px; margin-bottom: 5px; color: #aaa; }
 
         #start-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -66,15 +67,29 @@
     </div>
 
     <div id="settings-menu">
-        <h3>SETTINGS</h3>
+        <h2 style="margin-top:0; color:white;">SETTINGS</h2>
+        
         <div class="setting-row">
             <label>FOV: <span id="fov-val">80</span></label>
             <input type="range" id="fov-slider" min="40" max="120" value="80">
         </div>
+
         <div class="setting-row">
-            <label>SHOW FPS: <input type="checkbox" id="fps-toggle"></label>
+            <label>MAX FPS: <span id="fps-limit-val">60</span></label>
+            <input type="range" id="fps-slider" min="15" max="120" value="60">
         </div>
-        <button onclick="toggleSettings()" style="margin-top:10px; padding:5px;">CLOSE</button>
+
+        <div class="setting-row" style="flex-direction: row; justify-content: space-between; width: 80%;">
+            <label>INVERT CONTROLS</label>
+            <input type="checkbox" id="invert-toggle">
+        </div>
+
+        <div class="setting-row" style="flex-direction: row; justify-content: space-between; width: 80%;">
+            <label>STATS FOR NERDS</label>
+            <input type="checkbox" id="stats-toggle">
+        </div>
+
+        <button onclick="toggleSettings()" style="margin-top:15px; width: 100%; padding: 10px; background: #333; color: white; border: none; cursor: pointer;">CLOSE</button>
     </div>
 
     <button id="dev-toggle">DEV MODE: OFF</button>
@@ -83,12 +98,13 @@
     <div id="joystick-zone"></div>
 
     <a-scene id="mainScene" embedded vr-mode-ui="enabled: false" 
-             fog="type: exponential; color: #000; density: 0.35" 
-             stats="false"> <a-sky id="gameSky" color="#000"></a-sky>
+             fog="type: exponential; color: #000; density: 0.35">
+        
+        <a-sky id="gameSky" color="#000"></a-sky>
 
         <a-entity id="rig">
             <a-entity id="camera" camera="fov: 80" 
-                      look-controls="magicWindowTrackingEnabled: false; touchEnabled: true; reverseMouseDrag: false; reverseTouchDrag: false" 
+                      look-controls="magicWindowTrackingEnabled: false; touchEnabled: true;" 
                       position="0 1.6 0">
                 <a-light id="flashlight" type="spot" color="#fff" intensity="2.5" distance="30" angle="35" penumbra="0.5" castShadow="true"></a-light>
                 <a-light id="ambientLight" type="ambient" color="#666" intensity="0.3"></a-light>
@@ -108,8 +124,10 @@
         
         let moveForce = { x: 0, y: 0 };
         const moveSpeed = 0.16;
+        let lastFrameTime = 0;
+        let fpsLimit = 60;
 
-        // Generate World
+        // Generate Forest
         for (let i = 0; i < 180; i++) {
             const tree = document.createElement('a-box');
             const x = (Math.random() - 0.5) * 160;
@@ -123,7 +141,7 @@
             world.appendChild(tree);
         }
 
-        // Settings Logic
+        // --- Settings Logic ---
         function toggleSettings() {
             const menu = document.getElementById('settings-menu');
             menu.style.display = (menu.style.display === 'block') ? 'none' : 'block';
@@ -135,8 +153,22 @@
             cameraEntity.setAttribute('camera', 'fov', val);
         });
 
-        document.getElementById('fps-toggle').addEventListener('change', (e) => {
+        document.getElementById('fps-slider').addEventListener('input', (e) => {
+            fpsLimit = e.target.value;
+            document.getElementById('fps-limit-val').innerText = fpsLimit;
+        });
+
+        document.getElementById('stats-toggle').addEventListener('change', (e) => {
             scene.setAttribute('stats', e.target.checked);
+        });
+
+        document.getElementById('invert-toggle').addEventListener('change', (e) => {
+            const isInverted = e.target.checked;
+            // This flips the looking direction
+            cameraEntity.setAttribute('look-controls', {
+                reverseMouseDrag: isInverted,
+                reverseTouchDrag: isInverted
+            });
         });
 
         // Dev Mode Logic
@@ -166,18 +198,27 @@
             }).on('end', () => { moveForce = { x: 0, y: 0 }; });
         });
 
-        function update() {
-            if (moveForce.x !== 0 || moveForce.y !== 0) {
-                const direction = new THREE.Vector3();
-                cameraEntity.object3D.getWorldDirection(direction);
-                const sideDir = new THREE.Vector3();
-                sideDir.crossVectors(new THREE.Vector3(0, 1, 0), direction).normalize();
-                rig.object3D.position.addScaledVector(direction, -moveForce.y * moveSpeed);
-                rig.object3D.position.addScaledVector(sideDir, moveForce.x * moveSpeed);
+        // --- Optimized Movement & FPS Loop ---
+        function update(time) {
+            // FPS Limiter Logic
+            const delta = time - lastFrameTime;
+            const interval = 1000 / fpsLimit;
+
+            if (delta > interval) {
+                lastFrameTime = time - (delta % interval);
+
+                if (moveForce.x !== 0 || moveForce.y !== 0) {
+                    const direction = new THREE.Vector3();
+                    cameraEntity.object3D.getWorldDirection(direction);
+                    const sideDir = new THREE.Vector3();
+                    sideDir.crossVectors(new THREE.Vector3(0, 1, 0), direction).normalize();
+                    rig.object3D.position.addScaledVector(direction, -moveForce.y * moveSpeed);
+                    rig.object3D.position.addScaledVector(sideDir, moveForce.x * moveSpeed);
+                }
             }
             requestAnimationFrame(update);
         }
-        update();
+        requestAnimationFrame(update);
     </script>
 </body>
 </html>
