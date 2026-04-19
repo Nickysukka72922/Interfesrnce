@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>STALKER - Dev Mode Edition</title>
+    <title>STALKER - Control Fix</title>
     
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.9.1/nipplejs.min.js"></script>
@@ -12,12 +12,14 @@
         html, body { 
             margin: 0; padding: 0; width: 100%; height: 100%;
             overflow: hidden; background-color: black; position: fixed;
-            touch-action: none; 
+            /* touch-action: none is removed to allow dual-touch looking */
         }
 
         #joystick-zone {
             position: absolute; bottom: 40px; left: 40px;
-            width: 120px; height: 120px; z-index: 1000;
+            width: 150px; height: 150px; z-index: 1000;
+            /* This ensures the joystick doesn't stop the camera from working elsewhere */
+            touch-action: none; 
         }
 
         #start-screen {
@@ -32,12 +34,11 @@
             cursor: pointer; font-size: 1.2rem;
         }
 
-        /* Dev Mode Button Styling */
         #dev-toggle {
             position: absolute; top: 10px; left: 10px;
             z-index: 3000; padding: 10px; background: rgba(255,0,0,0.5);
             color: white; border: 1px solid white; font-family: monospace;
-            font-size: 10px; display: none; /* Hide until game starts */
+            font-size: 10px; display: none;
         }
     </style>
 </head>
@@ -48,20 +49,20 @@
     </div>
 
     <button id="dev-toggle">DEV MODE: OFF</button>
+    
     <div id="joystick-zone"></div>
 
     <a-scene id="mainScene" embedded vr-mode-ui="enabled: false" fog="type: exponential; color: #000; density: 0.35">
         <a-sky id="gameSky" color="#000"></a-sky>
 
         <a-entity id="rig">
-            <a-entity id="camera" camera look-controls position="0 1.6 0">
+            <a-entity id="camera" camera look-controls="magicWindowTrackingEnabled: false; touchEnabled: true" position="0 1.6 0">
                 <a-light id="flashlight" type="spot" color="#fff" intensity="2.5" distance="30" angle="35" penumbra="0.5" castShadow="true"></a-light>
                 <a-light id="ambientLight" type="ambient" color="#666" intensity="0.3"></a-light>
             </a-entity>
         </a-entity>
 
         <a-entity id="devSun" light="type: directional; intensity: 0; castShadow: false" position="-1 1 1"></a-entity>
-
         <a-plane rotation="-90 0 0" width="1000" height="1000" color="#111" shadow="receive: true"></a-plane>
         <a-entity id="world"></a-entity>
     </a-scene>
@@ -80,7 +81,7 @@
         const moveSpeed = 0.16;
         let devModeActive = false;
 
-        // Generate World
+        // Generate Forest
         for (let i = 0; i < 180; i++) {
             const tree = document.createElement('a-box');
             const x = (Math.random() - 0.5) * 160;
@@ -98,20 +99,18 @@
         devBtn.addEventListener('click', () => {
             devModeActive = !devModeActive;
             if (devModeActive) {
-                // TURN ON BRIGHT MODE
                 devBtn.innerText = "DEV MODE: ON";
-                scene.setAttribute('fog', 'density: 0'); // Remove fog
-                sky.setAttribute('color', '#87CEEB'); // Blue sky
-                devSun.setAttribute('light', 'intensity: 1'); // Turn on sun
-                ambient.setAttribute('light', 'intensity: 0.8'); // Brighten ambient
+                scene.setAttribute('fog', 'density: 0');
+                sky.setAttribute('color', '#87CEEB');
+                devSun.setAttribute('light', 'intensity: 1');
+                ambient.setAttribute('light', 'intensity: 0.8');
                 devBtn.style.background = "rgba(0,255,0,0.5)";
             } else {
-                // TURN ON HORROR MODE
                 devBtn.innerText = "DEV MODE: OFF";
-                scene.setAttribute('fog', 'density: 0.35'); // Add fog back
-                sky.setAttribute('color', '#000'); // Black sky
-                devSun.setAttribute('light', 'intensity: 0'); // Turn off sun
-                ambient.setAttribute('light', 'intensity: 0.3'); // Darken ambient
+                scene.setAttribute('fog', 'density: 0.35');
+                sky.setAttribute('color', '#000');
+                devSun.setAttribute('light', 'intensity: 0');
+                ambient.setAttribute('light', 'intensity: 0.3');
                 devBtn.style.background = "rgba(255,0,0,0.5)";
             }
         });
@@ -119,7 +118,7 @@
         // Start Logic
         document.querySelector('#start-button').addEventListener('click', function() {
             document.querySelector('#start-screen').style.display = 'none';
-            devBtn.style.display = 'block'; // Show dev button when playing
+            devBtn.style.display = 'block';
 
             const manager = nipplejs.create({
                 zone: document.getElementById('joystick-zone'),
@@ -131,21 +130,27 @@
             manager.on('move', (evt, data) => {
                 const force = Math.min(data.force, 1);
                 const angle = data.angle.radian;
-                moveForce.x = Math.cos(angle) * force;
+                // FIXED: Inverted X logic for better feel
+                moveForce.x = -Math.cos(angle) * force; 
                 moveForce.y = Math.sin(angle) * force;
             });
 
             manager.on('end', () => { moveForce = { x: 0, y: 0 }; });
         });
 
+        // Movement Loop
         function update() {
             if (moveForce.x !== 0 || moveForce.y !== 0) {
                 const direction = new THREE.Vector3();
                 camera.object3D.getWorldDirection(direction);
+                
+                // Calculate "Right" vector from camera
                 const sideDir = new THREE.Vector3();
                 sideDir.crossVectors(new THREE.Vector3(0, 1, 0), direction).normalize();
 
+                // Apply Forward/Backward
                 rig.object3D.position.addScaledVector(direction, -moveForce.y * moveSpeed);
+                // Apply Left/Right (Inversion fixed here)
                 rig.object3D.position.addScaledVector(sideDir, moveForce.x * moveSpeed);
             }
             requestAnimationFrame(update);
