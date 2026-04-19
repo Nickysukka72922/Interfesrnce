@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>STALKER - Fixed Joystick</title>
+    <title>STALKER - Dev Mode Edition</title>
     
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.9.1/nipplejs.min.js"></script>
@@ -31,6 +31,14 @@
             border: none; font-family: monospace; font-weight: bold;
             cursor: pointer; font-size: 1.2rem;
         }
+
+        /* Dev Mode Button Styling */
+        #dev-toggle {
+            position: absolute; top: 10px; left: 10px;
+            z-index: 3000; padding: 10px; background: rgba(255,0,0,0.5);
+            color: white; border: 1px solid white; font-family: monospace;
+            font-size: 10px; display: none; /* Hide until game starts */
+        }
     </style>
 </head>
 <body>
@@ -39,20 +47,22 @@
         <button id="start-button">START GAME</button>
     </div>
 
+    <button id="dev-toggle">DEV MODE: OFF</button>
     <div id="joystick-zone"></div>
 
-    <a-scene embedded vr-mode-ui="enabled: false" fog="type: exponential; color: #000; density: 0.3">
-        <a-sky color="#000"></a-sky>
+    <a-scene id="mainScene" embedded vr-mode-ui="enabled: false" fog="type: exponential; color: #000; density: 0.35">
+        <a-sky id="gameSky" color="#000"></a-sky>
 
         <a-entity id="rig">
             <a-entity id="camera" camera look-controls position="0 1.6 0">
                 <a-light id="flashlight" type="spot" color="#fff" intensity="2.5" distance="30" angle="35" penumbra="0.5" castShadow="true"></a-light>
-                <a-light type="ambient" color="#666" intensity="0.3"></a-light>
+                <a-light id="ambientLight" type="ambient" color="#666" intensity="0.3"></a-light>
             </a-entity>
         </a-entity>
 
+        <a-entity id="devSun" light="type: directional; intensity: 0; castShadow: false" position="-1 1 1"></a-entity>
+
         <a-plane rotation="-90 0 0" width="1000" height="1000" color="#111" shadow="receive: true"></a-plane>
-        
         <a-entity id="world"></a-entity>
     </a-scene>
 
@@ -60,11 +70,17 @@
         const world = document.querySelector('#world');
         const rig = document.querySelector('#rig');
         const camera = document.querySelector('#camera');
+        const devBtn = document.querySelector('#dev-toggle');
+        const scene = document.querySelector('#mainScene');
+        const devSun = document.querySelector('#devSun');
+        const sky = document.querySelector('#gameSky');
+        const ambient = document.querySelector('#ambientLight');
         
         let moveForce = { x: 0, y: 0 };
         const moveSpeed = 0.16;
+        let devModeActive = false;
 
-        // Generate World Pillars
+        // Generate World
         for (let i = 0; i < 180; i++) {
             const tree = document.createElement('a-box');
             const x = (Math.random() - 0.5) * 160;
@@ -78,13 +94,33 @@
             world.appendChild(tree);
         }
 
+        // Dev Mode Logic
+        devBtn.addEventListener('click', () => {
+            devModeActive = !devModeActive;
+            if (devModeActive) {
+                // TURN ON BRIGHT MODE
+                devBtn.innerText = "DEV MODE: ON";
+                scene.setAttribute('fog', 'density: 0'); // Remove fog
+                sky.setAttribute('color', '#87CEEB'); // Blue sky
+                devSun.setAttribute('light', 'intensity: 1'); // Turn on sun
+                ambient.setAttribute('light', 'intensity: 0.8'); // Brighten ambient
+                devBtn.style.background = "rgba(0,255,0,0.5)";
+            } else {
+                // TURN ON HORROR MODE
+                devBtn.innerText = "DEV MODE: OFF";
+                scene.setAttribute('fog', 'density: 0.35'); // Add fog back
+                sky.setAttribute('color', '#000'); // Black sky
+                devSun.setAttribute('light', 'intensity: 0'); // Turn off sun
+                ambient.setAttribute('light', 'intensity: 0.3'); // Darken ambient
+                devBtn.style.background = "rgba(255,0,0,0.5)";
+            }
+        });
+
         // Start Logic
         document.querySelector('#start-button').addEventListener('click', function() {
             document.querySelector('#start-screen').style.display = 'none';
-            
-            // FULLSCREEN REMOVED to keep joystick visible
+            devBtn.style.display = 'block'; // Show dev button when playing
 
-            // Setup Joystick
             const manager = nipplejs.create({
                 zone: document.getElementById('joystick-zone'),
                 mode: 'static',
@@ -102,7 +138,6 @@
             manager.on('end', () => { moveForce = { x: 0, y: 0 }; });
         });
 
-        // Movement Frame Loop
         function update() {
             if (moveForce.x !== 0 || moveForce.y !== 0) {
                 const direction = new THREE.Vector3();
