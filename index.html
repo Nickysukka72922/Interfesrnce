@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>STALKER - Pro Settings Fixed</title>
+    <title>STALKER - Master Invert Fixed</title>
     
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.9.1/nipplejs.min.js"></script>
@@ -44,7 +44,7 @@
 
         .setting-row { margin: 15px 0; display: flex; flex-direction: column; align-items: center;}
         input[type=range] { width: 80%; cursor: pointer; }
-        label { font-size: 12px; margin-bottom: 5px; color: #aaa; }
+        label { font-size: 11px; margin-bottom: 5px; color: #aaa; text-transform: uppercase; }
 
         #start-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -66,29 +66,29 @@
     </div>
 
     <div id="settings-menu">
-        <h2 style="margin-top:0; color:white;">SETTINGS</h2>
+        <h2 style="margin-top:0; color:white;">SYSTEM SETTINGS</h2>
         
         <div class="setting-row">
-            <label>FOV: <span id="fov-val">80</span></label>
+            <label>Field of View: <span id="fov-val">80</span></label>
             <input type="range" id="fov-slider" min="40" max="120" value="80">
         </div>
 
         <div class="setting-row">
-            <label>MAX FPS: <span id="fps-limit-val">60</span></label>
+            <label>Performance Cap: <span id="fps-limit-val">60</span> FPS</label>
             <input type="range" id="fps-slider" min="15" max="120" value="60">
         </div>
 
-        <div class="setting-row" style="flex-direction: row; justify-content: space-between; width: 80%;">
-            <label>INVERT LOOK</label>
+        <div class="setting-row" style="flex-direction: row; justify-content: space-between; width: 90%;">
+            <label>INVERT ALL CONTROLS</label>
             <input type="checkbox" id="invert-toggle">
         </div>
 
-        <div class="setting-row" style="flex-direction: row; justify-content: space-between; width: 80%;">
+        <div class="setting-row" style="flex-direction: row; justify-content: space-between; width: 90%;">
             <label>STATS FOR NERDS</label>
             <input type="checkbox" id="stats-toggle">
         </div>
 
-        <button onclick="toggleSettings()" style="margin-top:15px; width: 100%; padding: 10px; background: #333; color: white; border: none; cursor: pointer;">CLOSE</button>
+        <button onclick="toggleSettings()" style="margin-top:15px; width: 100%; padding: 10px; background: #333; color: white; border: none; cursor: pointer;">RETURN TO ZONE</button>
     </div>
 
     <button id="dev-toggle">DEV MODE: OFF</button>
@@ -123,6 +123,7 @@
         const moveSpeed = 0.16;
         let lastFrameTime = 0;
         let fpsLimit = 60;
+        let globalInverted = false;
 
         // Generate Forest
         for (let i = 0; i < 180; i++) {
@@ -158,17 +159,19 @@
             scene.setAttribute('stats', e.target.checked);
         });
 
-        // FIXED INVERT LOGIC: Removing and re-adding component to force state change
+        // RE-CALIBRATED MASTER INVERT
         document.getElementById('invert-toggle').addEventListener('change', (e) => {
-            const isInverted = e.target.checked;
+            globalInverted = e.target.checked;
+            
+            // Invert Camera Look
             cameraEntity.removeAttribute('look-controls');
-            // Give the browser a millisecond to breathe, then re-add
             setTimeout(() => {
                 cameraEntity.setAttribute('look-controls', {
                     magicWindowTrackingEnabled: false,
                     touchEnabled: true,
-                    reverseMouseDrag: !isInverted, // Swapping these based on A-frame defaults
-                    reverseTouchDrag: !isInverted
+                    // Swapping logic to ensure "Invert" actually flips it from standard
+                    reverseMouseDrag: globalInverted, 
+                    reverseTouchDrag: globalInverted 
                 });
             }, 10);
         });
@@ -193,8 +196,20 @@
             }).on('move', (evt, data) => {
                 const force = Math.min(data.force, 1);
                 const angle = data.angle.radian;
-                moveForce.x = -Math.cos(angle) * force; 
-                moveForce.y = Math.sin(angle) * force;
+                
+                // CORRECTED DEFAULT MOVEMENT: 
+                // x = cos(angle), y = sin(angle)
+                let xBasis = Math.cos(angle) * force;
+                let yBasis = Math.sin(angle) * force;
+
+                // Apply Master Invert to Move Axes
+                if (globalInverted) {
+                    moveForce.x = -xBasis; // Invert Left/Right
+                    moveForce.y = -yBasis; // Invert Forward/Back
+                } else {
+                    moveForce.x = xBasis;  // Normal Left/Right
+                    moveForce.y = yBasis;  // Normal Forward/Back
+                }
             }).on('end', () => { moveForce = { x: 0, y: 0 }; });
         });
 
@@ -210,6 +225,8 @@
                     cameraEntity.object3D.getWorldDirection(direction);
                     const sideDir = new THREE.Vector3();
                     sideDir.crossVectors(new THREE.Vector3(0, 1, 0), direction).normalize();
+                    
+                    // Move based on relative camera angle
                     rig.object3D.position.addScaledVector(direction, -moveForce.y * moveSpeed);
                     rig.object3D.position.addScaledVector(sideDir, moveForce.x * moveSpeed);
                 }
