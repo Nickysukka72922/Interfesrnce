@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>STALKER - Pro Settings Edition</title>
+    <title>STALKER - Pro Settings Fixed</title>
     
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.9.1/nipplejs.min.js"></script>
@@ -34,7 +34,6 @@
             font-size: 10px; display: none;
         }
 
-        /* Settings Menu Panel */
         #settings-menu {
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             width: 280px; background: rgba(0,0,0,0.95); border: 2px solid #444;
@@ -80,7 +79,7 @@
         </div>
 
         <div class="setting-row" style="flex-direction: row; justify-content: space-between; width: 80%;">
-            <label>INVERT CONTROLS</label>
+            <label>INVERT LOOK</label>
             <input type="checkbox" id="invert-toggle">
         </div>
 
@@ -97,9 +96,7 @@
     
     <div id="joystick-zone"></div>
 
-    <a-scene id="mainScene" embedded vr-mode-ui="enabled: false" 
-             fog="type: exponential; color: #000; density: 0.35">
-        
+    <a-scene id="mainScene" embedded vr-mode-ui="enabled: false">
         <a-sky id="gameSky" color="#000"></a-sky>
 
         <a-entity id="rig">
@@ -141,7 +138,6 @@
             world.appendChild(tree);
         }
 
-        // --- Settings Logic ---
         function toggleSettings() {
             const menu = document.getElementById('settings-menu');
             menu.style.display = (menu.style.display === 'block') ? 'none' : 'block';
@@ -162,26 +158,30 @@
             scene.setAttribute('stats', e.target.checked);
         });
 
+        // FIXED INVERT LOGIC: Removing and re-adding component to force state change
         document.getElementById('invert-toggle').addEventListener('change', (e) => {
             const isInverted = e.target.checked;
-            // This flips the looking direction
-            cameraEntity.setAttribute('look-controls', {
-                reverseMouseDrag: isInverted,
-                reverseTouchDrag: isInverted
-            });
+            cameraEntity.removeAttribute('look-controls');
+            // Give the browser a millisecond to breathe, then re-add
+            setTimeout(() => {
+                cameraEntity.setAttribute('look-controls', {
+                    magicWindowTrackingEnabled: false,
+                    touchEnabled: true,
+                    reverseMouseDrag: !isInverted, // Swapping these based on A-frame defaults
+                    reverseTouchDrag: !isInverted
+                });
+            }, 10);
         });
 
-        // Dev Mode Logic
         document.getElementById('dev-toggle').addEventListener('click', function() {
             const active = this.innerText.includes("OFF");
             this.innerText = active ? "DEV MODE: ON" : "DEV MODE: OFF";
             this.style.background = active ? "rgba(0,255,0,0.5)" : "rgba(255,0,0,0.5)";
-            scene.setAttribute('fog', 'density', active ? 0 : 0.35);
+            scene.setAttribute('fog', 'type: exponential; color: #000; density: ' + (active ? '0' : '0.35'));
             document.querySelector('#gameSky').setAttribute('color', active ? '#87CEEB' : '#000');
             document.querySelector('#devSun').setAttribute('light', 'intensity', active ? 1 : 0);
         });
 
-        // Start Game
         document.querySelector('#start-button').addEventListener('click', function() {
             document.querySelector('#start-screen').style.display = 'none';
             document.getElementById('dev-toggle').style.display = 'block';
@@ -198,9 +198,7 @@
             }).on('end', () => { moveForce = { x: 0, y: 0 }; });
         });
 
-        // --- Optimized Movement & FPS Loop ---
         function update(time) {
-            // FPS Limiter Logic
             const delta = time - lastFrameTime;
             const interval = 1000 / fpsLimit;
 
